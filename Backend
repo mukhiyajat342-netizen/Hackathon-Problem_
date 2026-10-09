@@ -1,1 +1,259 @@
+ import json, math, time
+from collections import Counter, deque
+from pathlib import Path
 
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+BASE = Path(__file__).resolve().parent.parent
+DATA_FILE = BASE / "data" / "templates.json"
+SYSTEMS = {"ASL", "ISL"}          # American + Indian Sign Language
+FRAME_LEN = 63                    # 21 hand landmarks x (x, y, z)
+MAX_SAMPLES = 30                  # per label, per system
+
+app = FastAPI(title="SignBridge API", version="2.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+templates: dict[str, dict[str, list[list[float]]]] = {s: {} for s in SYSTEMS}
+stats = {
+    "frames": 0,
+    "recognized": 0,
+    "latency": deque(maxlen=300),
+    "history": deque(maxlen=60),
+}
+
+
+def load_templates() -> None:
+    if DATA_FILE.exists():
+        saved = json.loads(DATA_FILE.read_text())
+        for s in SYSTEMS:
+            templates[s] = saved.get(s, {})
+
+
+def save_templates() -> None:
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATA_FILE.write_text(json.dumps(templates))
+
+
+load_templates()
+
+
+# ---------- Normalize + template classifier ----------
+def normalize(points: list[float]) -> list[float]:
+    """Wrist-centred, scale-invariant hand vector."""
+    if len(points) != FRAME_LEN:
+        raise ValueError("expected 63 landmark values")
+    pts = [points[i:i + 3] for i in range(0, FRAME_LEN, 3)]
+    wx, wy, wz = pts[0]
+    rel = [(x - wx, y - wy, z - wz) for x, y, z in pts]
+    scale = max(math.dist(p, (0.0, 0.0, 0.0)) for p in rel) or 1.0
+    return [c / scale for p in rel for c in p]
+
+
+def classify(system: str, vec: list[float]) -> tuple[str | None, float]:
+    best, best_d = None, float("inf")
+    for label, samples in templates[system].items():
+        for s in samples:
+            d = math.dist(vec, s)
+            if d < best_d:
+                best, best_d = label, d
+    if best is None:
+        return None, 0.0
+    return best, round(max(0.0, 1 - best_d / 3.0), 3)
+
+
+# ---------- Finger-state rules ----------
+def _pt(points: list[float], i: int) -> tuple[float, float, float]:
+    return points[i * 3], points[i * 3 + 1], points[i * 3 + 2]
+
+
+def finger_states(points: list[float]) -> dict[str, bool]:
+    """Har ungli khuli hai ya band, raw landmarks se."""
+    wrist = _pt(points, 0)
+
+    def extended(tip: int, pip: int) -> bool:
+        return math.dist(_pt(points, tip), wrist) > math.dist(_pt(points, pip), wrist) * 1.1
+
+    index_mcp = _pt(points, 5)
+    thumb = math.dist(_pt(points, 4), index_mcp) > math.dist(_pt(points, 3), index_mcp) * 1.1
+    return {
+        "thumb": thumb,
+        "index": extended(8, 6),
+        "middle": extended(12, 10),
+        "ring": extended(16, 14),
+        "pinky": extended(20, 18),
+    }
+
+
+# (thumb, index, middle, ring, pinky) -> ISL sign
+ISL_RULES = {
+    (False, True, False, False, False): "1",
+    (False, True, True, False, False): "2",
+    (True, True, True, False, False): "3",
+    (False, True, True, True, True): "4",
+    (True, True, True, True, True): "5",
+}
+
+# (thumb, index, middle, ring, pinky) -> ASL letter
+ASL_RULES = {
+    (False, False, False, False, False): "A",
+    (False, True, False, False, False): "D",
+    (False, True, True, True, True): "B",
+    (False, True, True, False, False): "V",
+    (False, True, True, True, False): "W",
+    (True, True, False, False, False): "L",
+    (False, False, False, False, True): "I",
+    (True, False, False, False, True): "Y",
+}
+
+
+def rule_classify(system: str, points: list[float]) -> str | None:
+    st = finger_states(points)
+    key = tuple(st[f] for f in ("thumb", "index", "middle", "ring", "pinky"))
+    if system == "ASL":
+        return ASL_RULES.get(key)
+    if system == "ISL":
+        return ISL_RULES.get(key)
+    return None
+
+
+# ---------- Train API ----------
+class TrainPayload(BaseModel):
+    system: str
+    label: str = Field(min_length=1, max_length=12)
+    landmarks: list[float] = Field(min_length=FRAME_LEN, max_length=FRAME_LEN)
+
+
+@app.post("/api/train")
+def train(p: TrainPayload):
+    if p.system not in SYSTEMS:
+        raise HTTPException(400, "system must be ASL or ISL")
+    try:
+        vec = normalize(p.landmarks)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    bucket = templates[p.system].setdefault(p.label.upper(), [])
+    bucket.append(vec)
+    del bucket[:-MAX_SAMPLES]
+    save_templates()
+    return {"ok": True, "label": p.label.upper(), "samples": len(bucket)}
+
+
+# ---------- Analytics API ----------
+@app.get("/api/stats")
+def get_stats():
+    lat = list(stats["latency"])
+    return {
+        "frames": stats["frames"],
+        "recognized": stats["recognized"],
+        "avg_latency_ms": round(sum(lat) / len(lat), 2) if lat else 0,
+        "trained_samples": sum(len(v) for s in templates.values() for v in s.values()),
+        "labels": {s: {k: len(v) for k, v in templates[s].items()} for s in SYSTEMS},
+        "history": list(stats["history"]),
+    }
+
+
+# ---------- Live WebSocket: dono haath ek saath ----------
+@app.websocket("/ws/{system}")
+async def live(ws: WebSocket, system: str):
+    if system not in SYSTEMS:
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    windows = [deque(maxlen=7), deque(maxlen=7)]
+    currents: list[str | None] = [None, None]
+    last_seen: list[str | None] = [None, None]
+    try:
+        while True:
+            msg = json.loads(await ws.receive_text())
+            hands_in = msg.get("hands") or []
+            stats["frames"] += 1
+            t0 = time.perf_counter()
+            out = []
+
+            for i in range(2):
+                label, conf = None, 0.0
+                if i < len(hands_in):
+                    try:
+                        raw = [float(v) for v in hands_in[i]]
+                        # 1) pehle rules (bina training ke chalte hain)
+                        rl = rule_classify(system, raw)
+                        if rl:
+                            label, conf = rl, 0.9
+                        else:
+                            # 2) phir trained templates
+                            vec = normalize(raw)
+                            label, conf = classify(system, vec)
+                    except (ValueError, TypeError):
+                        label = None
+
+                windows[i].append(label)
+                stable, count = Counter(windows[i]).most_common(1)[0]
+                if stable is None:
+                    # haath hata: agla sign turant aa sakta hai
+                    if not any(windows[i]):
+                        currents[i] = None
+                        last_seen[i] = None
+                elif count >= 5 and stable != currents[i]:
+                    # bounce guard: same letter tab tak dobara nahi jab tak haath hatega nahi
+                    if stable != last_seen[i]:
+                        currents[i] = stable
+                        last_seen[i] = stable
+                        stats["recognized"] += 1
+                        stats["history"].append({
+                            "time": time.strftime("%H:%M:%S"),
+                            "label": stable,
+                            "system": system,
+                            "confidence": conf,
+                        })
+                    else:
+                        currents[i] = stable
+                out.append({"label": label, "confidence": conf, "stable": currents[i]})
+
+            stats["latency"].append((time.perf_counter() - t0) * 1000)
+            await ws.send_json({"hands": out})
+    except WebSocketDisconnect:
+        pass
+
+
+# ---------- Helpline + SOS (priority) ----------
+HELPLINES = [
+    {"name": "Emergency (Police/Ambulance/Fire)", "number": "112", "for": "sab"},
+    {"name": "Ambulance", "number": "108", "for": "medical"},
+    {"name": "Police", "number": "100", "for": "police"},
+    {"name": "Women Helpline", "number": "1091", "for": "mahila"},
+    {"name": "Childline", "number": "1098", "for": "bachche"},
+    {"name": "Tele-MANAS (mental health, 24x7)", "number": "14416", "for": "mann"},
+]
+sos_log: deque = deque(maxlen=100)
+
+
+class SosPayload(BaseModel):
+    mode: str = Field(max_length=10)
+
+
+@app.get("/api/helplines")
+def helplines():
+    return HELPLINES
+
+
+@app.post("/api/sos")
+def sos(p: SosPayload):
+    sos_log.append({"time": time.strftime("%H:%M:%S"), "mode": p.mode})
+    return {
+        "ok": True,
+        "message": "SOS record ho gaya. Turant madad ke liye 112 par call karein.",
+        "helplines": HELPLINES[:2],
+    }
+
+
+@app.get("/api/sos")
+def sos_list():
+    return list(sos_log)
+
+
+# ---------- Frontend (hamesha sabse last mein) ----------
+FRONTEND = BASE / "frontend"
+app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="frontend")
