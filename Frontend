@@ -1,1 +1,1254 @@
+<!doctype html>
+<html lang="en">
 
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>SignBridge // Accessible Interface</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+
+    <style>
+        :root {
+            --bg: #05060d;
+            --glass: rgba(255, 255, 255, .05);
+            --line: rgba(255, 255, 255, .18);
+            --txt: #eef4ff;
+            --c1: #00f5d4;
+            --c2: #7b2cff;
+            --c3: #ff2e88
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        [hidden] {
+            display: none !important
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--txt);
+            min-height: 100vh;
+            font-size: 16px
+        }
+
+        body.mode-mute {
+            --c1: #00f5d4;
+            --c2: #00b4d8;
+            --c3: #7b2cff
+        }
+
+        body.mode-deaf {
+            --c1: #ffd166;
+            --c2: #ff7b00;
+            --c3: #ef476f
+        }
+
+        body.mode-blind {
+            --c1: #c77dff;
+            --c2: #4361ee;
+            --c3: #f72585
+        }
+
+        body.big-text {
+            font-size: 20px
+        }
+
+        body.hc {
+            --bg: #000;
+            --glass: #000;
+            --line: #ffff00;
+            --c1: #ffff00;
+            --c2: #fff;
+            --c3: #fff
+        }
+
+        body.hc::before {
+            display: none
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: -50%;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 20%, rgba(123, 44, 255, .35), transparent 40%), radial-gradient(circle at 80% 70%, rgba(0, 245, 212, .2), transparent 40%), radial-gradient(circle at 60% 10%, rgba(255, 46, 136, .18), transparent 35%);
+            animation: drift 18s ease-in-out infinite alternate
+        }
+
+        @keyframes drift {
+            to {
+                transform: translate(4%, -3%) rotate(6deg)
+            }
+        }
+
+        @keyframes flash {
+
+            0%,
+            100% {
+                box-shadow: inset 0 0 0 0 transparent
+            }
+
+            50% {
+                box-shadow: inset 0 0 0 14px #ff2e88
+            }
+        }
+
+        body.sos-flash {
+            animation: flash .5s 3
+        }
+
+        /* overlays (gate, language, mode, full text) */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: rgba(5, 6, 13, .97);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: auto
+        }
+
+        .stepBox {
+            text-align: center;
+            max-width: 860px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px
+        }
+
+        .logo {
+            font-size: clamp(30px, 6vw, 52px);
+            font-weight: 800;
+            letter-spacing: 8px;
+            background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3));
+            -webkit-background-clip: text;
+            color: transparent;
+            margin: 0
+        }
+
+        .tag {
+            opacity: .7;
+            margin: 0;
+            letter-spacing: 2px
+        }
+
+        .q {
+            font-size: 1.2em;
+            margin: 0;
+            max-width: 680px;
+            line-height: 1.5
+        }
+
+        .hint {
+            opacity: .65;
+            font-size: .9em;
+            margin: 0
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            width: 100%
+        }
+
+        .choice {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 22px 16px;
+            font-size: 1em;
+            min-height: 170px;
+            text-align: center
+        }
+
+        .choice .n {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(90deg, var(--c2), var(--c3));
+            color: #fff;
+            font-weight: 800
+        }
+
+        .choice .ic {
+            font-size: 2.2em
+        }
+
+        .choice b {
+            font-size: 1.1em
+        }
+
+        .choice small {
+            opacity: .75;
+            line-height: 1.4
+        }
+
+        /* controls */
+        button,
+        select,
+        input {
+            font: inherit;
+            color: inherit;
+            background: rgba(255, 255, 255, .07);
+            border: 2px solid var(--line);
+            border-radius: 12px;
+            padding: 10px 14px;
+            cursor: pointer;
+            transition: box-shadow .2s, transform .1s
+        }
+
+        button:hover {
+            box-shadow: 0 0 18px var(--c2)
+        }
+
+        button:active {
+            transform: scale(.97)
+        }
+
+        button:focus,
+        select:focus,
+        input:focus,
+        a:focus {
+            outline: 3px solid #ffff00;
+            outline-offset: 2px
+        }
+
+        button.primary,
+        .bigBtn {
+            background: linear-gradient(90deg, var(--c2), var(--c3));
+            border: none;
+            font-weight: 700
+        }
+
+        .bigBtn {
+            padding: 18px 40px;
+            font-size: 1.2em
+        }
+
+        button.sos {
+            background: #d00000;
+            border: none;
+            font-weight: 800;
+            letter-spacing: 1px
+        }
+
+        button.sos:hover {
+            box-shadow: 0 0 22px #ff3b3b
+        }
+
+        /* layout */
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 22px;
+            border-bottom: 1px solid var(--line);
+            backdrop-filter: blur(8px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(5, 6, 13, .7)
+        }
+
+        .brand,
+        .tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center
+        }
+
+        .logoSm {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 6px;
+            background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3));
+            -webkit-background-clip: text;
+            color: transparent
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            border: 1px solid var(--c1);
+            color: var(--c1)
+        }
+
+        .badge.on {
+            background: var(--c1);
+            color: #000
+        }
+
+        #statusBar {
+            min-height: 28px;
+            padding: 10px 22px;
+            font-size: 1.05em;
+            color: var(--c1)
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 20px;
+            padding: 12px 22px 30px
+        }
+
+        @media(max-width:920px) {
+            .grid {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 0
+        }
+
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 18px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 0 30px rgba(0, 245, 212, .07)
+        }
+
+        h3 {
+            margin: 0 0 12px;
+            letter-spacing: 2px;
+            font-size: 13px;
+            text-transform: uppercase;
+            color: var(--c1)
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+            align-items: center
+        }
+
+        .cam {
+            position: relative;
+            border-radius: 14px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            background: #000;
+            margin-top: 14px
+        }
+
+        .cam video,
+        .cam canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1)
+        }
+
+        .hands {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 14px;
+            text-align: center
+        }
+
+        .big {
+            font-size: 58px;
+            font-weight: 800;
+            text-shadow: 0 0 25px var(--c1);
+            min-height: 70px
+        }
+
+        .note {
+            font-size: .9em;
+            opacity: .85;
+            min-height: 1em;
+            color: #ffd166
+        }
+
+        .sentence {
+            font-size: 1.3em;
+            min-height: 70px;
+            word-break: break-word;
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(0, 0, 0, .4);
+            border: 1px solid var(--line)
+        }
+
+        .captions {
+            font-size: 1.15em;
+            min-height: 90px;
+            max-height: 220px;
+            overflow: auto;
+            padding: 12px;
+            border-radius: 14px;
+            background: #000;
+            border: 1px solid var(--line)
+        }
+
+        .captions .log {
+            opacity: .6;
+            font-size: .85em;
+            padding: 3px 0
+        }
+
+        #captionNow {
+            color: var(--c1)
+        }
+
+        .help {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--line)
+        }
+
+        .help a {
+            background: linear-gradient(90deg, #00b894, #00f5d4);
+            color: #000;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-weight: 700
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px
+        }
+
+        .stat {
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(0, 0, 0, .3);
+            border: 1px solid var(--line);
+            font-size: .85em
+        }
+
+        .stat b {
+            display: block;
+            font-size: 1.8em;
+            color: var(--c1)
+        }
+
+        .hist {
+            max-height: 200px;
+            overflow: auto;
+            font-family: ui-monospace, monospace;
+            font-size: .85em;
+            margin-top: 12px
+        }
+
+        .hist div {
+            padding: 6px 0;
+            border-bottom: 1px dashed var(--line)
+        }
+
+        #fullText {
+            background: #05060d;
+            flex-direction: column;
+            gap: 24px
+        }
+
+        #bigText {
+            font-size: min(14vw, 160px);
+            font-weight: 800;
+            text-align: center;
+            word-break: break-word;
+            color: var(--c1);
+            text-shadow: 0 0 30px var(--c1)
+        }
+
+        .small {
+            font-size: .85em;
+            opacity: .75
+        }
+    </style>
+</head>
+
+<body class="mode-mute">
+
+    <!-- Step 1: Gate (speech ke liye user click zaroori hai) -->
+    <div id="gate" class="overlay">
+        <div class="stepBox">
+            <h1 class="logo">SIGNBRIDGE</h1>
+            <p class="tag">SIGN · SPEAK · CONNECT</p>
+            <button class="bigBtn" id="gateBtn">
+                <span>Start SignBridge</span>
+            </button>
+            <p class="hint">Press Enter or click. Voice control starts after this.</p>
+        </div>
+    </div>
+
+    <!-- Step 2: Language choice -->
+    <div id="langStep" class="overlay" hidden>
+        <div class="stepBox">
+            <h2 style="margin:0;letter-spacing:3px">Language</h2>
+            <p class="q" id="langQ"></p>
+            <div class="cards">
+                <button class="choice" data-lang="en"><span class="n">1</span><span
+                        class="ic">Aa</span><b>English</b></button>
+                <button class="choice" data-lang="hi"><span class="n">2</span><span class="ic">अ</span><b>हिन्दी
+                        (Hindi)</b></button>
+                <button class="choice" data-lang="kn"><span class="n">3</span><span class="ic">ಅ</span><b>ಕನ್ನಡ
+                        (Kannada)</b></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Mode choice -->
+    <div id="modeStep" class="overlay" hidden>
+        <div class="stepBox">
+            <h2 style="margin:0;letter-spacing:3px" data-i18n="modeTitle">Which option describes you?</h2>
+            <p class="q" id="modeQ"></p>
+            <div class="cards">
+                <button class="choice" data-mode="mute"><span class="n">1</span><span class="ic">🤟</span><b
+                        data-i18n="m_mute"></b><small data-i18n="d_mute"></small></button>
+                <button class="choice" data-mode="deaf"><span class="n">2</span><span class="ic">👂</span><b
+                        data-i18n="m_deaf"></b><small data-i18n="d_deaf"></small></button>
+                <button class="choice" data-mode="blind"><span class="n">3</span><span class="ic">🦯</span><b
+                        data-i18n="m_blind"></b><small data-i18n="d_blind"></small></button>
+                <button class="choice" data-mode="normal"><span class="n">4</span><span class="ic">🙂</span><b
+                        data-i18n="m_normal"></b><small data-i18n="d_normal"></small></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full screen text (doosron ko dikhane ke liye) -->
+    <div id="fullText" class="overlay" hidden>
+        <div id="bigText"></div>
+        <button id="closeFull"><span data-i18n="close">Close</span></button>
+    </div>
+
+    <!-- Main app -->
+    <div id="app" hidden>
+        <header>
+            <div class="brand">
+                <span class="logoSm">SIGNBRIDGE</span>
+                <span class="badge" id="conn">OFFLINE</span>
+                <span class="badge" id="modeBadge">—</span>
+            </div>
+            <div class="tools">
+                <select id="langSel" aria-label="Language">
+                    <option value="en">English</option>
+                    <option value="hi">हिन्दी</option>
+                    <option value="kn">ಕನ್ನಡ</option>
+                </select>
+                <button id="voiceTop" aria-label="Voice on or off"><span></span></button>
+                <button id="changeMode"><span data-i18n="changeMode">Change mode</span></button>
+                <button id="fontBtn"><span data-i18n="font">A+ Font</span></button>
+                <button id="contrastBtn"><span data-i18n="contrast">High contrast</span></button>
+                <button class="sos" id="sosTop" aria-label="SOS emergency">🆘 <span
+                        data-i18n="sosTop">SOS</span></button>
+            </div>
+        </header>
+        <p id="statusBar" role="status" aria-live="polite"></p>
+
+        <main class="grid">
+            <div class="col">
+                <section class="card" id="camCard">
+                    <div class="row" style="margin-top:0">
+                        <select id="system" aria-label="Sign language">
+                            <option value="ASL">American Sign Language (ASL)</option>
+                            <option value="ISL">Indian Sign Language (ISL)</option>
+                        </select>
+                        <button class="primary" id="startBtn"><span></span></button>
+                        <span class="badge" id="handBadge">—</span>
+                        <span class="badge" id="fps">0 fps</span>
+                    </div>
+                    <div class="cam">
+                        <video id="video" playsinline muted></video>
+                        <canvas id="overlay"></canvas>
+                    </div>
+                    <div class="hands">
+                        <div><small>HAND 1</small>
+                            <div class="big" id="letter0">·</div><span class="badge" id="conf0">—</span>
+                        </div>
+                        <div><small>HAND 2</small>
+                            <div class="big" id="letter1">·</div><span class="badge" id="conf1">—</span>
+                        </div>
+                    </div>
+                    <p class="note" id="signNote"></p>
+                </section>
+
+                <section class="card">
+                    <h3 data-i18n="msgLabel">Your message</h3>
+                    <div class="sentence" id="sentence" aria-live="polite"></div>
+                    <div class="row">
+                        <button id="speakBtn">🔊 <span data-i18n="speak">Speak</span></button>
+                        <button id="showBtn">📺 <span data-i18n="show">Show</span></button>
+                        <button id="spaceBtn"><span data-i18n="space">Space</span></button>
+                        <button id="delBtn">⌫ <span data-i18n="del">Delete</span></button>
+                        <button id="clearBtn"><span data-i18n="clear">Clear</span></button>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="col">
+                <section class="card" id="helpCard">
+                    <h3 data-i18n="helpTitle">Helpline desk</h3>
+                    <button class="sos" id="sosBtn" style="width:100%;margin-bottom:12px"
+                        aria-label="Request emergency help">🆘 <span data-i18n="sosBtn">SOS</span></button>
+                    <div id="helpList"></div>
+                </section>
+
+                <section class="card">
+                    <h3 data-i18n="capLabel">Voice & captions</h3>
+                    <button id="voiceBtn" style="width:100%"><span></span></button>
+                    <div class="captions" id="captions" role="log" aria-live="polite" style="margin-top:12px">
+                        <div id="captionNow" class="small" data-i18n="capEmpty"></div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h3 data-i18n="analyticsTitle">Live analytics</h3>
+                    <div class="stats">
+                        <div class="stat"><b id="sFrames">0</b><span data-i18n="frames">frames</span></div>
+                        <div class="stat"><b id="sRec">0</b><span data-i18n="recognized">recognized</span></div>
+                        <div class="stat"><b id="sLat">0</b><span data-i18n="latency">latency</span></div>
+                        <div class="stat"><b id="sLabels">0</b><span data-i18n="samples">samples</span></div>
+                    </div>
+                    <div class="hist" id="hist"></div>
+                </section>
+
+                <section class="card">
+                    <h3 data-i18n="trainTitle">Teach a sign</h3>
+                    <div class="row" style="margin-top:0">
+                        <input id="label" maxlength="12" data-i18n-ph="trainLabelPh" placeholder="Label, e.g. A"
+                            aria-label="Sign label">
+                        <button id="captureBtn"><span data-i18n="capture">Capture 10 frames</span></button>
+                    </div>
+                    <p id="trainMsg" class="small"></p>
+                </section>
+            </aside>
+        </main>
+    </div>
+
+    <script>
+
+
+    
+        const $ = id => document.getElementById(id);
+        const video = $('video'), canvas = $('overlay'), ctx = canvas.getContext('2d');
+        const HAND_COLORS = ['#00f5d4', '#ff2e88'];
+        const CONNECTIONS = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
+        [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
+        const LANGS = { en: 'en-IN', hi: 'hi-IN', kn: 'kn-IN' };
+        const LANG_KEYS = { '1': 'en', '2': 'hi', '3': 'kn' };
+        const MODE_KEYS = { '1': 'mute', '2': 'deaf', '3': 'blind', '4': 'normal' };
+
+        /* ---------- Translations ---------- */
+        const T = {
+            en: {
+                gateBtn: 'Start SignBridge', langQ: 'Choose your language. Press 1 for English, 2 for Hindi, or 3 for Kannada. You can also say the name.',
+                modeQ: 'Which option describes you best? Press 1 for mute, 2 for deaf, 3 for blind, or 4 for normal. You can also say the option.',
+                m_mute: 'Mute (Gunga)', d_mute: 'I communicate with sign language. Text appears on screen and the app speaks for me.',
+                m_deaf: 'Deaf (Bahira)', d_deaf: 'Live captions of what others say, big text, vibration and screen alerts.',
+                m_blind: 'Blind (Andha)', d_blind: 'Voice first. Control the whole app by speaking. Everything is read aloud.',
+                m_normal: 'Normal', d_normal: 'All features together.',
+                intro_mute: 'Mute mode. Sign in front of the camera. Your text appears on screen, and you can press Speak.',
+                intro_deaf: 'Deaf mode. Captions show what others say. You will get vibration and screen flash alerts.',
+                intro_blind: 'Blind mode. Voice control is on. Say help to hear the commands, or say read screen to hear the page.',
+                intro_normal: 'Normal mode. All features are available.',
+                modeIs: 'Mode', camStart: 'Start camera', camLive: 'Camera live', camStarted: 'Camera started. You can start signing.',
+                camErr: 'Camera not found. Allow camera access and use localhost.', noMediapipe: 'Hand tracking could not load. Check your internet and refresh.',
+                noVoice: 'Voice is not supported in this browser. Please use Chrome.', micDenied: 'Microphone permission was denied.',
+                voiceOnBtn: 'Turn voice ON', voiceOffBtn: 'Turn voice OFF', voiceOnMsg: 'Voice is on.', voiceOffMsg: 'Voice is off.',
+                linked: 'LINKED', offline: 'OFFLINE', handOk: 'Hand detected', noHand: 'No hand',
+                emptyMsg: 'Your sentence will appear here', speak: 'Speak', show: 'Show (for others)', space: 'Space', del: 'Delete', clear: 'Clear',
+                cleared: 'Sentence cleared.', msgLabel: 'Your message', capLabel: 'Voice & captions', capEmpty: 'Turn voice on to see live captions here.',
+                modeTitle: 'Which option describes you?', helpTitle: 'Helpline desk (priority)', sosBtn: 'SOS — I NEED HELP', sosTop: 'SOS',
+                sosFallback: 'SOS. Please call 112 right away.', helplineOpen: 'Helpline desk opened. For emergencies, dial 112.',
+                analyticsTitle: 'Live analytics', frames: 'frames processed', recognized: 'signs recognized', latency: 'avg latency (ms)', samples: 'trained samples',
+                noSigns: 'No trained signs yet. Use Teach a sign below, or choose ISL and show numbers 1 to 5.',
+                trainTitle: 'Teach a sign', trainLabelPh: 'Label, e.g. A', capture: 'Capture 10 frames', trainNeedLabel: 'Please enter a label first.',
+                trainNeedHand: 'Show your hand to the camera first.', trainCapturing: 'Capturing', trainSaved: 'samples saved for', trainErr: 'Error', serverErr: 'Could not connect to server.',
+                changeMode: 'Change mode', font: 'A+ Font', contrast: 'High contrast', close: 'Close',
+                cmdList: 'You can say: camera on, speak, read screen, clear, delete, space, show, helpline, SOS, change mode, big text, high contrast, voice off.',
+                readScreen: 'Read screen', sentenceIs: 'Your message is', noMsg: 'There is no message yet.', added: 'Added.', langChanged: 'Language changed to English.'
+            },
+            hi: {
+                gateBtn: 'SignBridge shuru karein', langQ: 'Apni bhasha chunein. 1 dabayein English ke liye, 2 Hindi ke liye, ya 3 Kannada ke liye.',
+                modeQ: 'Aap par kaun sa option sabse theek baithta hai? 1 mook, 2 badhir, 3 drishtihin, ya 4 saamanya dabayein.',
+                m_mute: 'Mook (Gunga)', d_mute: 'Main sign language se baat karta hoon. Text screen par aata hai aur app mere liye bolta hai.',
+                m_deaf: 'Badhir (Bahira)', d_deaf: 'Dusre log kya bol rahe hain uske live captions, bada text, vibration aur screen alerts.',
+                m_blind: 'Drishtihin (Andha)', d_blind: 'Pehle awaaz. Bolkar poora app chala sakte hain, aur sab kuch bolkar sunaya jata hai.',
+                m_normal: 'Saamanya', d_normal: 'Sabhi features ek saath.',
+                intro_mute: 'Mook mode. Camera ke saamne sign karein. Aapka text screen par dikhega, aur Bolo dabakar sun sakte hain.',
+                intro_deaf: 'Badhir mode. Captions mein dusron ki baat dikhegi. Vibration aur screen flash alerts milenge.',
+                intro_blind: 'Drishtihin mode. Voice control chalu hai. Madad bolein to commands sunayi denge, screen padho bolein to page padha jayega.',
+                intro_normal: 'Saamanya mode. Sabhi features uplabdh hain.',
+                modeIs: 'Mode', camStart: 'Camera chalu karein', camLive: 'Camera chalu hai', camStarted: 'Camera chalu ho gaya. Sign karna shuru karein.',
+                camErr: 'Camera nahi mila. Camera ki permission dein.', noMediapipe: 'Hand tracking load nahi hua. Internet check karke refresh karein.',
+                noVoice: 'Is browser mein voice support nahi hai. Chrome use karein.', micDenied: 'Mic ki permission nahi mili.',
+                voiceOnBtn: 'Voice chalu karein', voiceOffBtn: 'Voice band karein', voiceOnMsg: 'Voice chalu hai.', voiceOffMsg: 'Voice band hai.',
+                linked: 'JUDA HUA', offline: 'OFFLINE', handOk: 'Haath dikh raha hai', noHand: 'Haath nahi dikh raha',
+                emptyMsg: 'Aapka message yahan dikhega', speak: 'Bolo', show: 'Dikhao (dusron ke liye)', space: 'Space', del: 'Mitao', clear: 'Saaf karo',
+                cleared: 'Message saaf ho gaya.', msgLabel: 'Aapka message', capLabel: 'Awaaz aur captions', capEmpty: 'Voice chalu karein, live captions yahan dikhenge.',
+                modeTitle: 'Aap par kaun sa option lagta hai?', helpTitle: 'Helpline desk (zaruri)', sosBtn: 'SOS — MUJHE MADAD CHAHIYE', sosTop: 'SOS',
+                sosFallback: 'SOS. Turant 112 par call karein.', helplineOpen: 'Helpline desk khul gaya. Emergency mein 112 dial karein.',
+                analyticsTitle: 'Live analytics', frames: 'frames', recognized: 'signs pehchane', latency: 'avg latency (ms)', samples: 'trained samples',
+                noSigns: 'Abhi koi trained sign nahi hai. Neeche Sign sikhayein use karein, ya ISL chunkar 1 se 5 numbers dikhayein.',
+                trainTitle: 'Sign sikhayein', trainLabelPh: 'Label, jaise A', capture: '10 frames capture karein', trainNeedLabel: 'Pehle label likhein.',
+                trainNeedHand: 'Pehle haath camera ke saamne dikhayein.', trainCapturing: 'Capture ho raha hai', trainSaved: 'samples save hue', trainErr: 'Error', serverErr: 'Server se connect nahi ho paya.',
+                changeMode: 'Mode badlein', font: 'A+ Font', contrast: 'High contrast', close: 'Band karein',
+                cmdList: 'Aap bol sakte hain: camera chalu, bolo, screen padho, saaf karo, mitao, space, dikhao, helpline, SOS, mode badlo, bada text, high contrast, voice band.',
+                readScreen: 'Screen padho', sentenceIs: 'Aapka message hai', noMsg: 'Abhi koi message nahi hai.', added: 'Jod diya.', langChanged: 'Bhasha Hindi ho gayi.'
+            },
+            kn: {
+                gateBtn: 'SignBridge ಪ್ರಾರಂಭಿಸಿ', langQ: 'ನಿಮ್ಮ ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ. 1 ಇಂಗ್ಲಿಷ್, 2 ಹಿಂದಿ, 3 ಕನ್ನಡ.',
+                modeQ: 'ನಿಮಗೆ ಯಾವ ಆಯ್ಕೆ ಸರಿಹೊಂದುತ್ತದೆ? 1 ಮೂಕ, 2 ಕಿವುಡ, 3 ಅಂಧ, 4 ಸಾಮಾನ್ಯ ಒತ್ತಿ.',
+                m_mute: 'ಮೂಕ (Gunga)', d_mute: 'ನಾನು ಸೈನ್ ಭಾಷೆಯಲ್ಲಿ ಮಾತನಾಡುತ್ತೇನೆ. ಪಠ್ಯ ಪರದೆಯಲ್ಲಿ ಕಾಣುತ್ತದೆ, ಆ್ಯಪ್ ನನ್ನ ಪರವಾಗಿ ಮಾತನಾಡುತ್ತದೆ.',
+                m_deaf: 'ಕಿವುಡ (Bahira)', d_deaf: 'ಇತರರು ಹೇಳುವುದರ ನೇರ ಶೀರ್ಷಿಕೆಗಳು, ದೊಡ್ಡ ಅಕ್ಷರ, ಕಂಪನ ಮತ್ತು ಪರದೆ ಎಚ್ಚರಿಕೆ.',
+                m_blind: 'ಅಂಧ (Andha)', d_blind: 'ಮೊದಲು ಧ್ವನಿ. ಮಾತಿನ ಮೂಲಕ ಇಡೀ ಆ್ಯಪ್ ನಿಯಂತ್ರಿಸಿ, ಎಲ್ಲವನ್ನೂ ಗಟ್ಟಿಯಾಗಿ ಓದಲಾಗುತ್ತದೆ.',
+                m_normal: 'ಸಾಮಾನ್ಯ', d_normal: 'ಎಲ್ಲಾ ಸೌಲಭ್ಯಗಳು ಒಟ್ಟಿಗೆ.',
+                intro_mute: 'ಮೂಕ ಮೋಡ್. ಕ್ಯಾಮೆರಾ ಮುಂದೆ ಸೈನ್ ಮಾಡಿ. ಪಠ್ಯ ಪರದೆಯಲ್ಲಿ ಕಾಣುತ್ತದೆ, ಮಾತನಾಡಲು ಮಾತನಾಡಿ ಒತ್ತಿ.',
+                intro_deaf: 'ಕಿವುಡ ಮೋಡ್. ಇತರರ ಮಾತು ಶೀರ್ಷಿಕೆಗಳಲ್ಲಿ ಕಾಣುತ್ತದೆ. ಕಂಪನ ಮತ್ತು ಪರದೆ ಎಚ್ಚರಿಕೆ ಸಿಗುತ್ತದೆ.',
+                intro_blind: 'ಅಂಧ ಮೋಡ್. ಧ್ವನಿ ನಿಯಂತ್ರಣ ಆನ್ ಆಗಿದೆ. ಸಹಾಯ ಎಂದು ಹೇಳಿ ಆಜ್ಞೆಗಳನ್ನು ಕೇಳಿ.',
+                intro_normal: 'ಸಾಮಾನ್ಯ ಮೋಡ್. ಎಲ್ಲಾ ಸೌಲಭ್ಯಗಳು ಲಭ್ಯವಿವೆ.',
+                modeIs: 'ಮೋಡ್', camStart: 'ಕ್ಯಾಮೆರಾ ಪ್ರಾರಂಭಿಸಿ', camLive: 'ಕ್ಯಾಮೆರಾ ಚಾಲನೆಯಲ್ಲಿದೆ', camStarted: 'ಕ್ಯಾಮೆರಾ ಪ್ರಾರಂಭವಾಗಿದೆ. ಸೈನ್ ಮಾಡಿ.',
+                camErr: 'ಕ್ಯಾಮೆರಾ ಸಿಗಲಿಲ್ಲ. ಅನುಮತಿ ನೀಡಿ.', noMediapipe: 'ಹ್ಯಾಂಡ್ ಟ್ರ್ಯಾಕಿಂಗ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ.',
+                noVoice: 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಬೆಂಬಲವಿಲ್ಲ. Chrome ಬಳಸಿ.', micDenied: 'ಮೈಕ್ ಅನುಮತಿ ನಿರಾಕರಿಸಲಾಗಿದೆ.',
+                voiceOnBtn: 'ಧ್ವನಿ ಆನ್ ಮಾಡಿ', voiceOffBtn: 'ಧ್ವನಿ ಆಫ್ ಮಾಡಿ', voiceOnMsg: 'ಧ್ವನಿ ಆನ್ ಆಗಿದೆ.', voiceOffMsg: 'ಧ್ವನಿ ಆಫ್ ಆಗಿದೆ.',
+                linked: 'ಸಂಪರ್ಕಗೊಂಡಿದೆ', offline: 'ಆಫ್‌ಲೈನ್', handOk: 'ಕೈ ಕಾಣಿಸುತ್ತಿದೆ', noHand: 'ಕೈ ಕಾಣುತ್ತಿಲ್ಲ',
+                emptyMsg: 'ನಿಮ್ಮ ಸಂದೇಶ ಇಲ್ಲಿ ಕಾಣುತ್ತದೆ', speak: 'ಮಾತನಾಡಿ', show: 'ತೋರಿಸಿ (ಇತರರಿಗಾಗಿ)', space: 'ಸ್ಥಳ', del: 'ಅಳಿಸಿ', clear: 'ತೆರವುಗೊಳಿಸಿ',
+                cleared: 'ಸಂದೇಶ ತೆರವುಗೊಳಿಸಲಾಗಿದೆ.', msgLabel: 'ನಿಮ್ಮ ಸಂದೇಶ', capLabel: 'ಧ್ವನಿ ಮತ್ತು ಶೀರ್ಷಿಕೆಗಳು', capEmpty: 'ಧ್ವನಿ ಆನ್ ಮಾಡಿ, ಇಲ್ಲಿ ನೇರ ಶೀರ್ಷಿಕೆಗಳು ಕಾಣುತ್ತವೆ.',
+                modeTitle: 'ನಿಮಗೆ ಯಾವ ಆಯ್ಕೆ ಸರಿ?', helpTitle: 'ಸಹಾಯವಾಣಿ (ಆದ್ಯತೆ)', sosBtn: 'SOS — ನನಗೆ ಸಹಾಯ ಬೇಕು', sosTop: 'SOS',
+                sosFallback: 'SOS. ತಕ್ಷಣ 112 ಗೆ ಕರೆ ಮಾಡಿ.', helplineOpen: 'ಸಹಾಯವಾಣಿ ತೆರೆಯಲಾಗಿದೆ. ತುರ್ತಿಗೆ 112 ಡಯಲ್ ಮಾಡಿ.',
+                analyticsTitle: 'ನೇರ ಅಂಕಿಅಂಶಗಳು', frames: 'ಫ್ರೇಮ್‌ಗಳು', recognized: 'ಗುರುತಿಸಿದ ಸೈನ್‌ಗಳು', latency: 'ಸರಾಸರಿ ವಿಳಂಬ (ms)', samples: 'ತರಬೇತಿ ಮಾದರಿಗಳು',
+                noSigns: 'ಇನ್ನೂ ಸೈನ್ ತರಬೇತಿ ಇಲ್ಲ. ಕೆಳಗೆ ಸೈನ್ ಕಲಿಸಿ ಬಳಸಿ, ಅಥವಾ ISL ಆಯ್ಕೆ ಮಾಡಿ 1 ರಿಂದ 5 ತೋರಿಸಿ.',
+                trainTitle: 'ಸೈನ್ ಕಲಿಸಿ', trainLabelPh: 'ಲೇಬಲ್, ಉದಾ: A', capture: '10 ಫ್ರೇಮ್ ಸೆರೆಹಿಡಿ', trainNeedLabel: 'ಮೊದಲು ಲೇಬಲ್ ಬರೆಯಿರಿ.',
+                trainNeedHand: 'ಮೊದಲು ಕೈ ಕ್ಯಾಮೆರಾ ಮುಂದೆ ತೋರಿಸಿ.', trainCapturing: 'ಸೆರೆಹಿಡಿಯಲಾಗುತ್ತಿದೆ', trainSaved: 'ಮಾದರಿಗಳು ಉಳಿಸಲಾಗಿದೆ', trainErr: 'ದೋಷ', serverErr: 'ಸರ್ವರ್ ಸಂಪರ್ಕವಾಗಲಿಲ್ಲ.',
+                changeMode: 'ಮೋಡ್ ಬದಲಿಸಿ', font: 'A+ ಅಕ್ಷರ', contrast: 'ಹೈ ಕಾಂಟ್ರಾಸ್ಟ್', close: 'ಮುಚ್ಚಿ',
+                cmdList: 'ನೀವು ಹೇಳಬಹುದು: ಕ್ಯಾಮೆರಾ ಆನ್, ಮಾತನಾಡಿ, ಪರದೆ ಓದು, ತೆರವುಗೊಳಿಸಿ, ಅಳಿಸಿ, ಸ್ಥಳ, ತೋರಿಸಿ, ಸಹಾಯವಾಣಿ, SOS, ಮೋಡ್ ಬದಲಿಸಿ, ದೊಡ್ಡ ಅಕ್ಷರ, ಹೈ ಕಾಂಟ್ರಾಸ್ಟ್, ಧ್ವನಿ ಆಫ್.',
+                readScreen: 'ಪರದೆ ಓದು', sentenceIs: 'ನಿಮ್ಮ ಸಂದೇಶ', noMsg: 'ಇನ್ನೂ ಸಂದೇಶವಿಲ್ಲ.', added: 'ಸೇರಿಸಲಾಗಿದೆ.', langChanged: 'ಭಾಷೆ ಕನ್ನಡಕ್ಕೆ ಬದಲಾಗಿದೆ.'
+            }
+        };
+        const t = k => (T[lang][k] ?? T.en[k] ?? k);
+
+        /* ---------- State ---------- */
+        let lang = 'en', MODE = null, step = 'gate', sentence = '';
+        let started = false, ws = null, wsTimer = null, hands = null;
+        let latestHands = [], lastStable = [null, null], sentFrames = 0, fpsT = performance.now();
+        let voiceWanted = false, rec = null, speaking = false, lastSpoken = '', utterId = 0;
+
+        /* ---------- Text + i18n ---------- */
+        function applyI18n() {
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+            $('gateBtn').querySelector('span').textContent = t('gateBtn');
+            $('langQ').textContent = t('langQ');
+            $('modeQ').textContent = t('modeQ');
+            $('modeBadge').textContent = MODE ? t('m_' + MODE) : '—';
+            $('startBtn').querySelector('span').textContent = started ? t('camLive') : t('camStart');
+            $('conn').textContent = ws && ws.readyState === 1 ? t('linked') : t('offline');
+            updateVoiceBtn();
+            render();
+        }
+        function render() {
+            $('sentence').textContent = sentence || t('emptyMsg');
+            $('bigText').textContent = sentence || '...';
+        }
+        function updateVoiceBtn() {
+            const label = voiceWanted ? t('voiceOffBtn') : t('voiceOnBtn');
+            ['voiceBtn', 'voiceTop'].forEach(id => { $(id).querySelector('span').textContent = label; });
+            $('voiceBtn').querySelector('span').textContent = label;
+            $('voiceTop').querySelector('span').textContent = label;
+            $('voiceTop').setAttribute('aria-pressed', voiceWanted);
+        }
+
+        /* ---------- Speech output ---------- */
+        function say(text) {
+            if (!text || !('speechSynthesis' in window)) return;
+            lastSpoken = text;
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = LANGS[lang]; u.rate = 0.95;
+            const v = speechSynthesis.getVoices().find(x => x.lang.toLowerCase().startsWith(LANGS[lang].slice(0, 2)));
+            if (v) u.voice = v;
+            const id = ++utterId; speaking = true;
+            const done = () => setTimeout(() => { if (id === utterId) speaking = false; }, 500);
+            u.onend = done; u.onerror = done;
+            speechSynthesis.speak(u);
+        }
+        function announce(text, urgent = false) {
+            $('statusBar').textContent = text;
+            if (MODE === 'deaf') {
+                navigator.vibrate?.(urgent ? [300, 100, 300] : [120]);
+                document.body.classList.add('sos-flash');
+                setTimeout(() => document.body.classList.remove('sos-flash'), 600);
+            } else {
+                say(text);
+            }
+        }
+
+        /* ---------- Steps: gate -> language -> mode -> app ---------- */
+        function showStep(s) {
+            step = s;
+            $('gate').hidden = s !== 'gate';
+            $('langStep').hidden = s !== 'lang';
+            $('modeStep').hidden = s !== 'mode';
+            $('app').hidden = s !== 'app';
+        }
+        function setLang(l) {
+            lang = l;
+            $('langSel').value = l;
+            applyI18n();
+            if (rec && voiceWanted) { try { rec.stop(); } catch { } }
+        }
+        function chooseLang(l) {
+            setLang(l);
+            showStep('mode');
+            say(t('modeQ'));
+        }
+        function chooseMode(m) {
+            MODE = m;
+            document.body.className = 'mode-' + m + (document.body.classList.contains('hc') ? ' hc' : '') + (document.body.classList.contains('big-text') ? ' big-text' : '');
+            $('camCard').hidden = m === 'blind';
+            showStep('app');
+            applyI18n();
+            announce(t('intro_' + m));
+            if (m !== 'blind') startCamera();
+        }
+        function goChangeMode() {
+            showStep('mode');
+            say(t('modeQ'));
+        }
+
+        $('gateBtn').onclick = () => { setVoice(true); showStep('lang'); say(t('langQ')); };
+        document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => chooseLang(b.dataset.lang));
+        document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => chooseMode(b.dataset.mode));
+        $('changeMode').onclick = goChangeMode;
+        $('langSel').onchange = e => { setLang(e.target.value); announce(t('langChanged')); };
+
+        /* ---------- Font + contrast ---------- */
+        function toggleFont() { document.body.classList.toggle('big-text'); }
+        function toggleContrast() { document.body.classList.toggle('hc'); }
+        $('fontBtn').onclick = toggleFont;
+        $('contrastBtn').onclick = toggleContrast;
+
+        /* ---------- Sentence ---------- */
+        function commit(letter) { sentence += letter; render(); }
+        $('spaceBtn').onclick = () => { sentence += ' '; render(); };
+        $('delBtn').onclick = () => { sentence = sentence.slice(0, -1); render(); };
+        $('clearBtn').onclick = () => { sentence = ''; render(); announce(t('cleared')); };
+        $('speakBtn').onclick = speakSentence;
+        function speakSentence() {
+            if (!sentence.trim()) { announce(t('noMsg')); return; }
+            say(sentence);
+        }
+        function showFull() { render(); $('fullText').hidden = false; }
+        $('showBtn').onclick = showFull;
+        $('closeFull').onclick = () => { $('fullText').hidden = true; };
+
+        /* ---------- Camera + MediaPipe hand tracking ---------- */
+        function handleResults(r) {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const all = r.multiHandLandmarks || [];
+            latestHands = all.map(lm => lm.flatMap(p => [p.x, p.y, p.z]));
+            $('handBadge').textContent = all.length ? t('handOk') : t('noHand');
+            all.forEach((lm, idx) => {
+                ctx.strokeStyle = HAND_COLORS[idx] || '#fff'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 3;
+                for (const [a, b] of CONNECTIONS) {
+                    ctx.beginPath();
+                    ctx.moveTo(lm[a].x * canvas.width, lm[a].y * canvas.height);
+                    ctx.lineTo(lm[b].x * canvas.width, lm[b].y * canvas.height);
+                    ctx.stroke();
+                }
+                for (const p of lm) { ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, 4, 0, 7); ctx.fill(); }
+            });
+        }
+        async function frameLoop() {
+            if (video.readyState >= 2 && hands) {
+                try { await hands.send({ image: video }); } catch (e) { console.error(e); }
+            }
+            requestAnimationFrame(frameLoop);
+        }
+        async function startCamera() {
+            if (started) return;
+            if (typeof Hands === 'undefined') { announce(t('noMediapipe'), true); return; }
+            if (!hands) {
+                hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}` });
+                hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+                hands.onResults(handleResults);
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                video.srcObject = stream;
+                await video.play();
+                started = true;
+                applyI18n();
+                connectWS();
+                frameLoop();
+                announce(t('camStarted'));
+            } catch (e) {
+                announce(t('camErr'), true);
+            }
+        }
+        $('startBtn').onclick = startCamera;
+
+        /* ---------- WebSocket: backend se sign recognition ---------- */
+        function connectWS() {
+            clearTimeout(wsTimer);
+            if (ws) { ws.onclose = null; ws.close(); }
+            const sys = $('system').value;
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            ws = new WebSocket(`${proto}://${location.host}/ws/${sys}`);
+            ws.onopen = () => { $('conn').textContent = t('linked') + ' · ' + sys; $('conn').classList.add('on'); };
+            ws.onclose = () => {
+                $('conn').textContent = t('offline'); $('conn').classList.remove('on');
+                if (started) wsTimer = setTimeout(connectWS, 2000);
+            };
+            ws.onmessage = e => {
+                const m = JSON.parse(e.data);
+                if (!m.hands) return;
+                for (let i = 0; i < 2; i++) {
+                    const h = m.hands[i] || { label: null, confidence: 0, stable: null };
+                    $('letter' + i).textContent = h.label || '·';
+                    $('conf' + i).textContent = h.label ? Math.round(h.confidence * 100) + '%' : '—';
+                    if (h.stable && h.stable !== lastStable[i] && step === 'app') commit(h.stable);
+                    lastStable[i] = h.stable || null;
+                }
+            };
+        }
+        $('system').onchange = () => { lastStable = [null, null]; if (started) connectWS(); };
+        setInterval(() => {
+            if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ hands: latestHands })); sentFrames++; }
+            const secs = (performance.now() - fpsT) / 1000;
+            if (secs >= 1) { $('fps').textContent = Math.round(sentFrames / secs) + ' fps'; sentFrames = 0; fpsT = performance.now(); }
+        }, 100);
+
+        /* ---------- Voice input (blind control, deaf captions) ---------- */
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        function ensureRec() {
+            if (!SR) return null;
+            if (!rec) {
+                rec = new SR();
+                rec.continuous = true; rec.interimResults = true;
+                rec.onresult = onVoice;
+                rec.onend = () => { rec.lang = LANGS[lang]; if (voiceWanted) { try { rec.start(); } catch { } } };
+                rec.onerror = e => {
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                        voiceWanted = false; updateVoiceBtn(); announce(t('micDenied'), true);
+                    }
+                };
+            }
+            return rec;
+        }
+        function setVoice(on) {
+            voiceWanted = on;
+            const r = ensureRec();
+            if (!r) { voiceWanted = false; updateVoiceBtn(); announce(t('noVoice')); return; }
+            if (on) { r.lang = LANGS[lang]; try { r.start(); } catch { } }
+            else { try { r.stop(); } catch { } }
+            updateVoiceBtn();
+            announce(on ? t('voiceOnMsg') : t('voiceOffMsg'));
+        }
+        $('voiceBtn').onclick = () => setVoice(!voiceWanted);
+        $('voiceTop').onclick = () => setVoice(!voiceWanted);
+
+        function onVoice(e) {
+            if (speaking) return;
+            let interim = '', fin = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                const tr = e.results[i][0].transcript;
+                if (e.results[i].isFinal) fin += tr; else interim += tr;
+            }
+            if (interim.trim()) $('captionNow').textContent = interim.trim();
+            fin = fin.trim();
+            if (!fin) return;
+            addCaption(fin);
+            handleVoice(fin.toLowerCase());
+        }
+        function addCaption(txt) {
+            const d = document.createElement('div');
+            d.className = 'log';
+            d.textContent = `${new Date().toLocaleTimeString()} · ${txt}`;
+            $('captions').prepend(d);
+            $('captionNow').textContent = txt;
+        }
+
+        const CMDS = [
+            [/\b(helpline|help line)\b|हेल्पलाइन|ಸಹಾಯವಾಣಿ/, () => { $('helpCard').scrollIntoView({ behavior: 'smooth' }); announce(t('helplineOpen')); }],
+            [/\b(help|commands|what can i say)\b|मदद|ಸಹಾಯ/, () => announce(t('cmdList'))],
+            [/\b(sos|emergency)\b|आपातकाल|ತುರ್ತು/, () => sendSOS()],
+            [/\b(read screen)\b|स्क्रीन पढ़ो|ಪರದೆ ಓದು/, readScreen],
+            [/\b(speak|bolo)\b|बोलो|ಮಾತನಾಡಿ/, speakSentence],
+            [/\b(clear)\b|साफ करो|ತೆರವುಗೊಳಿಸಿ/, () => { sentence = ''; render(); announce(t('cleared')); }],
+            [/\b(delete|back)\b|मिटाओ|ಅಳಿಸಿ/, () => { sentence = sentence.slice(0, -1); render(); }],
+            [/\b(space)\b/, () => { sentence += ' '; render(); }],
+            [/\b(camera on|start camera|camera chalu)\b/, startCamera],
+            [/\b(voice off|stop voice)\b/, () => setVoice(false)],
+            [/\b(change mode)\b/, goChangeMode],
+            [/\b(show screen|full screen|show)\b/, showFull],
+            [/\b(big text|bigger text)\b/, toggleFont],
+            [/\b(high contrast|contrast)\b/, toggleContrast],
+        ];
+
+        function handleVoice(s) {
+            if (step === 'gate') { if (/\b(start|begin)\b/.test(s)) $('gateBtn').click(); return; }
+            if (step === 'lang') {
+                if (/\b(english|one|1)\b/.test(s)) chooseLang('en');
+                else if (/\b(hindi|two|2)\b/.test(s)) chooseLang('hi');
+                else if (/\b(kannada|three|3)\b/.test(s)) chooseLang('kn');
+                return;
+            }
+            if (step === 'mode') {
+                if (/\b(mute|gunga|one|1)\b/.test(s)) chooseMode('mute');
+                else if (/\b(deaf|bahira|two|2)\b/.test(s)) chooseMode('deaf');
+                else if (/\b(blind|andha|three|3)\b/.test(s)) chooseMode('blind');
+                else if (/\b(normal|four|4)\b/.test(s)) chooseMode('normal');
+                return;
+            }
+            for (const [re, fn] of CMDS) if (re.test(s)) { fn(); return; }
+            if (MODE === 'blind') {
+                sentence += (sentence && !sentence.endsWith(' ') ? ' ' : '') + s;
+                render();
+                announce(t('added'));
+            }
+        }
+        function readScreen() {
+            const msg = `${t('modeIs')}: ${MODE ? t('m_' + MODE) : '—'}. ` +
+                (sentence.trim() ? `${t('sentenceIs')}: ${sentence}.` : `${t('noMsg')}.`);
+            announce(msg);
+        }
+
+        /* ---------- SOS + Helplines (priority) ---------- */
+        async function sendSOS() {
+            navigator.vibrate?.([400, 150, 400, 150, 400]);
+            document.body.classList.add('sos-flash');
+            setTimeout(() => document.body.classList.remove('sos-flash'), 1600);
+            let msg = t('sosFallback');
+            try {
+                const r = await fetch('/api/sos', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: MODE || 'none' })
+                });
+                const d = await r.json();
+                msg = d.message || msg;
+            } catch { }
+            loadHelplines();
+            $('helpCard').scrollIntoView({ behavior: 'smooth' });
+            announce(msg, true);
+        }
+        $('sosBtn').onclick = sendSOS;
+        $('sosTop').onclick = sendSOS;
+
+        async function loadHelplines() {
+            try {
+                const list = await (await fetch('/api/helplines')).json();
+                $('helpList').replaceChildren(...list.map(h => {
+                    const row = document.createElement('div'); row.className = 'help';
+                    const info = document.createElement('div');
+                    const name = document.createElement('b'); name.textContent = h.name;
+                    const num = document.createElement('div'); num.textContent = h.number;
+                    info.append(name, num);
+                    const a = document.createElement('a');
+                    a.href = `tel:${h.number}`; a.textContent = '📞 Call';
+                    a.setAttribute('aria-label', `Call ${h.name} at ${h.number}`);
+                    row.append(info, a);
+                    return row;
+                }));
+            } catch {
+                $('helpList').textContent = '112';
+            }
+        }
+
+        /* ---------- Training ---------- */
+        $('captureBtn').onclick = async () => {
+            const label = $('label').value.trim().toUpperCase();
+            if (!label) { $('trainMsg').textContent = t('trainNeedLabel'); return; }
+            if (!latestHands.length) { $('trainMsg').textContent = t('trainNeedHand'); return; }
+            let saved = 0, tries = 0;
+            $('trainMsg').textContent = `${t('trainCapturing')} "${label}"...`;
+            while (saved < 10 && tries < 60) {
+                tries++;
+                await new Promise(r => setTimeout(r, 250));
+                if (!latestHands.length) continue;
+                try {
+                    const res = await fetch('/api/train', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ system: $('system').value, label, landmarks: latestHands[0] })
+                    });
+                    if (!res.ok) { $('trainMsg').textContent = `${t('trainErr')}: ${await res.text()}`; return; }
+                    saved++;
+                } catch { $('trainMsg').textContent = t('serverErr'); return; }
+            }
+            $('trainMsg').textContent = `✔ ${saved} ${t('trainSaved')} "${label}"`;
+            refreshStats();
+        };
+
+        /* ---------- Analytics ---------- */
+        async function refreshStats() {
+            try {
+                const s = await (await fetch('/api/stats')).json();
+                $('sFrames').textContent = s.frames;
+                $('sRec').textContent = s.recognized;
+                $('sLat').textContent = s.avg_latency_ms;
+                $('sLabels').textContent = s.trained_samples;
+                $('signNote').textContent = s.trained_samples === 0 ? t('noSigns') : '';
+                $('hist').replaceChildren(...s.history.slice().reverse().map(h => {
+                    const d = document.createElement('div');
+                    d.textContent = `${h.time} · ${h.system} · ${h.label} · ${Math.round(h.confidence * 100)}%`;
+                    return d;
+                }));
+            } catch { }
+        }
+
+        /* ---------- Keyboard + blind focus ---------- */
+        document.addEventListener('keydown', e => {
+            if (e.target.matches('input,select,textarea')) return;
+            if (e.altKey) {
+                const k = e.key.toLowerCase();
+                if (k === 's') sendSOS();
+                else if (k === 'v') setVoice(!voiceWanted);
+                else if (k === 'm') goChangeMode();
+                else if (k === 'h') announce(t('cmdList'));
+                return;
+            }
+            if (step === 'gate' && e.key === 'Enter' && e.target.tagName !== 'BUTTON') { $('gateBtn').click(); return; }
+            if (step === 'lang' && LANG_KEYS[e.key]) { chooseLang(LANG_KEYS[e.key]); return; }
+            if (step === 'mode' && MODE_KEYS[e.key]) { chooseMode(MODE_KEYS[e.key]); return; }
+            if ((e.key === 'r' || e.key === 'R') && lastSpoken) say(lastSpoken);
+        });
+        document.addEventListener('focusin', e => {
+            if (MODE === 'blind' && step === 'app' && e.target.tagName === 'BUTTON') {
+                say((e.target.getAttribute('aria-label') || e.target.textContent).trim());
+            }
+        });
+
+        /* ---------- Init ---------- */
+        if (location.protocol === 'file:') {
+            $('statusBar').textContent = 'Please open the app at http://localhost:8000 (do not double-click the file).';
+        }
+        applyI18n();
+        showStep('gate');
+        loadHelplines();
+        refreshStats();
+        setInterval(refreshStats, 2000);
+
+        <!-- Yahan se code copy karein aur </body> ke just upar paste karein -->
+
+// 1. Gesture states ko track karne ke variables
+let lastWristY = 0;
+let isFistDetected = false;
+let nodCount = 0;
+let lastNodTimestamp = 0;
+
+// 2. ISL "YES" Detection Logic Function
+function detectIndianSignLanguageYes(landmarks) {
+    if (!landmarks || landmarks.length < 21) return false;
+
+    // Check if fingers are closed (Fist Shape)
+    const isIndexClosed  = landmarks[8].y  > landmarks[6].y;
+    const isMiddleClosed = landmarks[12].y > landmarks[10].y;
+    const isRingClosed   = landmarks[16].y > landmarks[14].y;
+    const isPinkyClosed  = landmarks[20].y > landmarks[18].y;
+
+    const currentFist = isIndexClosed && isMiddleClosed && isRingClosed && isPinkyClosed;
+
+    const currentWristY = landmarks[0].y;
+    const currentTime = Date.now();
+    let gestureTriggered = false;
+
+    if (currentFist) {
+        if (isFistDetected && lastWristY !== 0) {
+            const movementY = currentWristY - lastWristY; // Upar-neeche ka movement
+            
+            // Agar hath ko neeche jhatka diya (Nodding action)
+            if (movementY > 0.015 && (currentTime - lastNodTimestamp > 200)) {
+                nodCount++;
+                lastNodTimestamp = currentTime;
+                
+                if (nodCount >= 1) { 
+                    gestureTriggered = true;
+                    nodCount = 0; 
+                }
+            }
+        }
+        isFistDetected = true;
+    } else {
+        isFistDetected = false;
+        if (currentTime - lastNodTimestamp > 1000) {
+            nodCount = 0;
+        }
+    }
+
+    lastWristY = currentWristY;
+    return gestureTriggered;
+}
+
+// 3. MediaPipe Setup aur Results Callback Loop
+// (Ye aapke cdn script se 'Hands' class ko initialize karega)
+const handsInstance = new Hands({
+  locateFile: (file) => `https://jsdelivr.net{file}`
+});
+
+handsInstance.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+// Jab bhi camera frames se hand detect hoga, ye function chalega
+handsInstance.onResults((results) => {
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      const landmarks = results.multiHandLandmarks[0]; // Pehla hath select kiya
+      
+      // Check karein kya "YES" sign bana hai
+      const isYes = detectIndianSignLanguageYes(landmarks);
+      
+      if (isYes) {
+          console.log("ISL YES Detected!");
+          
+          // Aapke UI ke Status bar me text change karega
+          const statusBar = document.getElementById("statusBar");
+          if(statusBar) statusBar.innerText = "Detected Sign: YES (Haan)";
+          
+          // Aapke main UI ke screen box me text add karega
+          const sentenceBox = document.querySelector(".sentence");
+          if(sentenceBox) {
+              // Purane text me "Yes" jod dega
+              sentenceBox.innerText += " Yes"; 
+          }
+      }
+  }
+});
+
+// NOTE: Aapke webcam stream ke frames ko read karne ke liye aapko 
+// handsInstance.send({image: videoElement}) chalana hoga jo aapke ready frontend me hoga.
+
+    </script>
+</body>
+
+</html>
