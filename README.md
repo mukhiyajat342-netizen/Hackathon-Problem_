@@ -1,10 +1,7 @@
- ## SignBridge // Accessible Interface & Real-Time Hybrid Gesture Recognition System
+  ## SignBridge // Accessible Interface & Real-Time Hybrid Gesture Recognition System
 
 <p align="center">
   <a href="https://github.com">
-    <img src="https://shields.io" alt="GitHub Stars"/>
-    <img src="https://shields.io" alt="GitHub Forks"/>
-    <img src="https://shields.io" alt="GitHub Last Commit"/>
   </a>
 </p>
 
