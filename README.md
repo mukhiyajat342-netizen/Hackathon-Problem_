@@ -138,7 +138,7 @@ To expand the template dataset arrays (`templates.json`) accurately for new gest
 
 ## Project Directory Structure
 <pre>
- tamil-signbridge/
+ signbridge/
 │
 ├── .gitignore                  
 ├── README.md                   
