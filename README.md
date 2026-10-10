@@ -6,7 +6,8 @@
 </p>
 
 <p align="center">
-  <img src="https://ibb.co" alt="SignBridge Dashboard Preview" width="850px" style="border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1);"/>
+   <img width="500" height="350" alt=" signbridge-dashboard" src="https://github.com/user-attachments/assets/954bc200-442f-45bc-b318-bf104a9a83b6" />
+  <img width="1280" height="629" alt=" signbridge-gateway" src="https://github.com/user-attachments/assets/db3a4a70-64a6-4f61-8683-06a6cf829424" />
 </p>
 
 ## Overview
@@ -106,10 +107,6 @@ The client interface separates low-level frame telemetry extraction from high-le
 * **Presentation Engine UI:** A modern web dashboard interface powered by CSS variables, providing custom configuration templates supporting four inclusive interaction profiles: **Mook (Gunga / Mute)**, **Badhir (Bahira / Deaf)**, **Drishtihin (Andha / Blind)**, and **Saamanya (Standard)**.
 * **Computer Vision Kernel (`hands.js`):** Downloads and executes standard Google MediaPipe graphs inside localized WebGL textures, instantly passing normalized landmark data arrays to the network stream.
 * **TSL Combination Resolver:** Evaluates dynamic structural input tokens. When a base Tamil consonant and a following vowel are parsed sequentially, the interface automatically aggregates the states to render the combined compound character correctly on screen.
-
-<p align="center">
-  <img src="https://ibb.co" alt="Accessibility Mode Configuration Portal" width="750px" style="border-radius: 12px; box-shadow: 0 6px 16px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);"/>
-</p>
 
 ---
 
