@@ -138,18 +138,24 @@ To expand the template dataset arrays (`templates.json`) accurately for new gest
 
 ## Project Directory Structure
 <pre>
+ tamil-signbridge/
 │
+├── .gitignore                  
+├── README.md                   
+│
+├── assets/                     
+│   ├── signbridge-dashboard.png  
+│   └── signbridge-gateway.png    
 ├── data/
-│   └── templates.json          # Persistent JSON datastore for custom sign vectors
+│   └── templates.json          
 │
-├── frontend/
-│   ├── Frontend.html           # Universal multi-tenant responsive user panel
-│   └── assets/
-│       └── hands.js            # Compiled MediaPipe real-time tracking dependency
+├── Backend/
+│   ├── main.py                  
+│   └── tsl_rules.py           
 │
-├── backend/
-│   ├── main.py                 # Core FastAPI engine processing websockets & routes
-│   └── tsl_rules.py            # Static structural token logic matrices for Tamil
-│
-└── README.md                   # Operational reference manuals and system documentation
+└── Frontend/
+    ├── Frontend.html           
+    └── assets/
+        └── hands.js             
+
 </pre>
